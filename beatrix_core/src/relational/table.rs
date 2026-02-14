@@ -1,4 +1,6 @@
-use super::{db::Database, field::FieldDetails, helpers::format_name, select::Select, sql::Sql};
+use crate::relational::{column::ColumnType, sql::SqlTable};
+
+use super::{db::Database, helpers::format_name};
 
 #[derive(Debug, Clone)]
 pub struct TableDetails {
@@ -27,15 +29,14 @@ impl TableDetails {
 
 pub trait Table {
     fn table_details() -> TableDetails;
-    fn fields() -> Vec<FieldDetails>;
-    fn select() -> Select;
+    fn columns() -> Vec<Box<dyn ColumnType>>;
+    fn select<DB: sqlx::Database>() -> crate::relational::select::Select<Self, DB>
+    where
+        Self: Sized;
 }
 
-impl Sql for TableDetails {
-    fn to_sql<DB>(self, db: &DB) -> String
-    where
-        DB: Database,
-    {
+impl<T: Database> SqlTable<T> for TableDetails {
+    fn to_sql(&self, db: &T) -> String {
         format!(
             "{}{}{} as {}{}{}",
             db.backtick_open(),
@@ -48,12 +49,9 @@ impl Sql for TableDetails {
     }
 }
 
-impl Sql for Vec<TableDetails> {
-    fn to_sql<DB>(self, db: &DB) -> String
-    where
-        DB: Database,
-    {
-        self.into_iter()
+impl<T: Database> SqlTable<T> for Vec<TableDetails> {
+    fn to_sql(&self, db: &T) -> String {
+        self.iter()
             .map(|f| f.to_sql(db))
             .collect::<Vec<String>>()
             .join(", ")

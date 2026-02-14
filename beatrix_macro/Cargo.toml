@@ -8,11 +8,17 @@ edition = "2018"
 proc-macro = true
 
 [features]
+# Add this line to specify default features
+default = ["postgres"] 
+
 postgres = ["beatrix_core/postgres"]
 mongo = ["beatrix_core/mongo"]
 
 [dependencies]
-syn = "1.0"
-quote = "1.0"
-proc-macro2 = "1.0.29"
+syn = "2.0.115"
+quote = "1.0.44"
+proc-macro2 = "1.0.106"
 beatrix_core = { path="../beatrix_core", version = "0.1.0" }
+
+[dev-dependencies]
+macrotest = "1.2.0"

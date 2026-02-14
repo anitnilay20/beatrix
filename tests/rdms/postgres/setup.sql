@@ -1,3 +1,4 @@
+-- Active: 1770931349778@@127.0.0.1@5432@beatrix
 CREATE TABLE public."user" (
     id serial primary key,
     name character varying,

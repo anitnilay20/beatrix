@@ -7,32 +7,24 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-mongodb = { version = "1.1.1", optional = true}
+mongodb = { version = "3.5.1", optional = true }
 serde = "1.0.119"
 async-trait = "0.1.42"
-thiserror = "1.0"
+thiserror = "2.0.18"
 futures = "0.3"
-syn = { version = "1.0" }
-sqlx = { version = "0.5", optional = true, default-features = false }
-tokio-postgres = { version = "0.5.2", optional = true }
-serde_postgres = { version = "0.2", optional = true }
-tokio = { version = "0.2", features = ["full"] }
+syn = { version = "2.0.115" }
+tokio = { version = "1.49.0", features = ["full"] }
+sqlx = { version = "0.8", features = [
+  "runtime-tokio",
+  "postgres",
+  "chrono"
+], optional = true }
+chrono = { version = "0.4.43", optional = true }
 
 [features]
 default = ["postgres"]
-
-postgres = ["tokio-postgres", "serde_postgres"]
-# postgres = ["sqlx/postgres", "runtime-tokio-native-tls"]
-
-#runtimes from sqlx
-runtime-actix-native-tls = ["sqlx/runtime-actix-native-tls"]
-runtime-async-std-native-tls = ["sqlx/runtime-async-std-native-tls"]
-runtime-tokio-native-tls = ["sqlx/runtime-tokio-native-tls"]
-runtime-actix-rustls = ["sqlx/runtime-actix-rustls"]
-runtime-async-std-rustls = ["sqlx/runtime-async-std-rustls"]
-runtime-tokio-rustls = ["sqlx/runtime-tokio-rustls"]
+postgres = ["dep:sqlx", "sqlx/postgres"]
+chrono = ["dep:chrono", "sqlx/chrono"]
 
 #mongo
-mongo = ["mongodb", "mongo-tokio"]
-mongo-tokio = ["mongodb", "mongodb/tokio-runtime"]
-mongo-async-std = ["mongodb", "mongodb/async-std-runtime"]
+mongo = ["dep:mongodb"]

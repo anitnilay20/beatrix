@@ -1,125 +1,109 @@
-use futures::{pin_mut, TryStreamExt};
-use serde::{de::DeserializeOwned, Serialize};
-use tokio_postgres::types::ToSql;
-
-use super::{
-    db::{DBType, Database},
-    field::FieldDetails,
-    filters::Filters,
-    sql::Sql,
-    table::TableDetails,
+use crate::relational::{
+    column::ColumnType, filters::FilterType, query::QueryBuilder, sql::{SqlColumn, SqlSelect, SqlTable}
 };
 
-#[derive(Default, Clone)]
-pub struct Select {
-    pub(crate) fields: Vec<FieldDetails>,
+use super::{db::Database, table::TableDetails};
+
+#[async_trait::async_trait]
+pub trait SelectType<Backend: sqlx::Database>: Send + Sync {
+    fn new(columns: Vec<Box<dyn ColumnType>>, from: Vec<TableDetails>) -> Self
+    where
+        Self: Sized;
+    fn columns(self, columns: Vec<Box<dyn ColumnType>>) -> Self;
+    fn from(self, from: Vec<TableDetails>) -> Self;
+    fn filter(self, filters: Box<dyn FilterType<Backend>>) -> Self;
+
+    async fn fetch_all<A, DB>(&self, db: &DB) -> Result<Vec<A>, sqlx::Error>
+    where
+        A: Send + Unpin,
+        DB: Database<Backend = Backend> + Sync,
+        A: for<'r> sqlx::FromRow<'r, <Backend as sqlx::Database>::Row>;
+
+    async fn fetch_one<A, DB>(&self, db: &DB) -> Result<A, sqlx::Error>
+    where
+        A: Send + Unpin,
+        DB: Database<Backend = Backend> + Sync,
+        A: for<'r> sqlx::FromRow<'r, <Backend as sqlx::Database>::Row>;
+}
+
+// Ensure T is Send + Sync if it ever holds data
+pub struct Select<T, Backend: sqlx::Database> {
+    pub(crate) columns: Vec<Box<dyn ColumnType>>,
     pub(crate) from: Vec<TableDetails>,
-    pub(crate) filter: Vec<Filters>,
+    pub(crate) filter: Option<Box<dyn FilterType<Backend>>>,
+    // pub(crate) query_builder: QueryBuilder<Backend>,
+
+    _marker: std::marker::PhantomData<T>,
 }
 
-impl Select {
-    pub fn new(fields: Vec<FieldDetails>, from: Vec<TableDetails>) -> Self {
-        Self {
-            fields,
-            from,
-            filter: Vec::new(),
-        }
-    }
-
-    pub fn add_field(mut self, field: FieldDetails) -> Select {
-        self.fields.push(field);
-        self
-    }
-
-    pub fn fields(mut self, fields: Vec<FieldDetails>) -> Select {
-        self.fields = fields;
-        self
-    }
-
-    pub fn and_from<T>(mut self, table: TableDetails) -> Select {
-        self.from.push(table);
-        self
-    }
-
-    pub fn filter(mut self, filters: Filters) -> Self {
-        self.filter.push(filters);
-        self
-    }
-
-    pub async fn fetch_all<T, DB>(self, db: &DB) -> Result<Vec<T>, tokio_postgres::Error>
-    where
-        T: Serialize + DeserializeOwned,
-        DB: Database,
-    {
-        let client = db.client();
-        let sql = self.clone().to_sql(db);
-
-        let response = match client {
-            DBType::Postgres(client) => {
-                client
-                    .query_raw(
-                        &client.prepare(&sql).await?,
-                        self.filter.iter().map(|p| p.ty.to_sql() as &dyn ToSql),
-                    )
-                    .await?
-            }
-        };
-
-        let mut result: Vec<T> = vec![];
-        pin_mut!(response);
-        while let Some(row) = response.try_next().await? {
-            result.push(serde_postgres::from_row(&row).unwrap());
-        }
-
-        Ok(result)
-    }
-
-    pub async fn fetch_one<T, DB>(self, db: &DB) -> Result<Option<T>, tokio_postgres::Error>
-    where
-        T: Serialize + DeserializeOwned,
-        DB: Database,
-    {
-        let client = db.client();
-        let sql = self.clone().to_sql(db);
-
-        let response = match client {
-            DBType::Postgres(client) => {
-                client
-                    .query_raw(
-                        &client.prepare(&sql).await?,
-                        self.filter.iter().map(|p| p.ty.to_sql() as &dyn ToSql),
-                    )
-                    .await?
-            }
-        };
-
-        pin_mut!(response);
-        if let Some(row) = response.try_next().await? {
-            let result = serde_postgres::from_row(&row).unwrap();
-            Ok(Some(result))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
-impl Sql for Select {
-    fn to_sql<DB>(self, db: &DB) -> String
-    where
-        DB: Database,
-    {
-        let mut query = format!(
+impl<T, Db: Database> SqlSelect<Db> for Select<T, Db::Backend>
+where
+    Db::Backend: sqlx::Database,
+{
+    fn to_sql(&self, db: &Db) -> QueryBuilder<Db::Backend> {
+        let query = format!(
             "select {} from {}",
-            self.fields.to_sql(db),
+            self.columns.to_sql(db),
             self.from.to_sql(db),
         );
 
-        if !self.filter.is_empty() {
-            query.push_str(&format!(" where {}", self.filter.to_sql(db)));
+        let mut query_builder = QueryBuilder::new(query);
+
+        if let Some(filter) = &self.filter {
+            query_builder.push_sql(" where ");
+            filter.add_to_query(&mut query_builder);
         }
 
-        query.push(';');
-        println!("{}", query);
-        query
+        // println!("{:?}", query_builder.);
+        query_builder
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: Send + Sync, Backend: sqlx::Database> SelectType<Backend> for Select<T, Backend> { // <-- Ensure the Model (T) is thread-safe
+    fn new(columns: Vec<Box<dyn ColumnType>>, from: Vec<TableDetails>) -> Self
+    where
+        Self: Sized,
+    {
+        Self {
+            columns,
+            from,
+            filter: None,
+            // query_builder: QueryBuilder::new(String::new()),
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    fn columns(mut self, columns: Vec<Box<dyn ColumnType>>) -> Self {
+        self.columns = columns;
+        self
+    }
+
+    fn from(mut self, from: Vec<TableDetails>) -> Self {
+        self.from = from;
+        self
+    }
+
+    fn filter(mut self, filter: Box<dyn FilterType<Backend>>) -> Self {
+        self.filter = Some(filter);
+        self
+    }
+
+    async fn fetch_all<A, DB>(&self, db: &DB) -> Result<Vec<A>, sqlx::Error>
+    where
+        A: Send + Unpin,
+        DB: Database<Backend = Backend> + Sync,
+        A: for<'r> sqlx::FromRow<'r, <Backend as sqlx::Database>::Row>,
+    {
+        db.fetch_all::<A>(&self.to_sql(db)).await
+    }
+
+    async fn fetch_one<A, DB>(&self, db: &DB) -> Result<A, sqlx::Error>
+    where
+        A: Send + Unpin,
+        DB: Database<Backend = Backend> + Sync,
+        A: for<'r> sqlx::FromRow<'r, <Backend as sqlx::Database>::Row>,
+    {
+        db.fetch_one::<A>(&self.to_sql(db)).await
     }
 }

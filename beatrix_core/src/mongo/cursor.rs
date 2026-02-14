@@ -12,12 +12,12 @@ use super::{
 };
 
 pub struct ModelCursor<T> {
-    cursor: Cursor,
+    cursor: Cursor<T>,
     model: PhantomData<T>,
 }
 
 impl<T: MongoModel> ModelCursor<T> {
-    pub(crate) fn new(cursor: Cursor) -> Self {
+    pub(crate) fn new(cursor: Cursor<T>) -> Self {
         Self {
             model: std::marker::PhantomData,
             cursor,
@@ -38,7 +38,7 @@ impl<T: MongoModel> Stream for ModelCursor<T> {
             Poll::Ready(Some(Ok(doc))) => doc,
         };
 
-        match MongoModel::from_bson(doc) {
+        match MongoModel::from_bson(doc.to_document()?) {
             Ok(model) => Poll::Ready(Some(Ok(model))),
             Err(err) => Poll::Ready(Some(Err(err)))
         }
