@@ -127,7 +127,7 @@ where
             self.set_id(ObjectId::new());
         }
 
-        let doc = self.into_document()?;
+        let doc = self.to_document()?;
         collection
             .update_one(
                 doc! { "_id": self.id().unwrap() },
@@ -145,8 +145,7 @@ where
     /// Returns error if ID is null.
     async fn delete(&self, db: Database) -> Result<DeleteResult> {
         let id = self
-            .id()
-            .ok_or_else(|| error::Error::ModelIdRequiredForOperation)?;
+            .id().ok_or(error::Error::ModelIdRequiredForOperation)?;
 
         Ok(Self::collection(db)
             .delete_one(doc! {"_id": id}, None)
@@ -154,7 +153,7 @@ where
     }
 
     /// Convert instance to document.
-    fn into_document(&self) -> Result<Document> {
+    fn to_document(&self) -> Result<Document> {
         match to_bson(self)? {
             Bson::Document(doc) => Ok(doc),
             bsn => Err(error::Error::ModelSerToDocument(bsn.element_type())),

@@ -12,12 +12,12 @@ pub fn impl_mongo(ast: &syn::DeriveInput) -> TokenStream {
         if let Meta::List(MetaList { path, nested, .. }) = option {
             if *path.get_ident().unwrap() == "entity" {
                 nested.iter().for_each(|field| {
-                    if let NestedMeta::Meta(meta) = field {
-                        if let Meta::NameValue(MetaNameValue { path, lit, .. }) = meta {
-                            if *path.get_ident().unwrap() == "name" {
-                                if let Lit::Str(lit) = lit {
-                                    entity_name = lit.value();
-                                }
+                    if let NestedMeta::Meta(Meta::NameValue(MetaNameValue { path, lit, .. })) =
+                        field
+                    {
+                        if *path.get_ident().unwrap() == "name" {
+                            if let Lit::Str(lit) = lit {
+                                entity_name = lit.value();
                             }
                         }
                     }

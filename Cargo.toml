@@ -4,20 +4,41 @@ version = "0.1.0"
 authors = ["Anit Nilay <anit.nilay20@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-beatrix_macro = { path="beatrix_macro", version = "0.1.0" }
-beatrix_core = { path="beatrix_core", version = "0.1.0" }
-
-[dev-dependencies]
-serde = "1"
-tokio = "0.2.18"
-dotenv = "*"
-futures = "*"
-
 [workspace]
 members = [
     "beatrix_macro",
     "beatrix_core",
+    "beatrix_helpers",
 ]
+
+[features]
+default = ["postgres"]
+postgres = ["beatrix_core/postgres", "beatrix_macro/postgres"]
+chrono = ["beatrix_core/chrono"]
+mongo = ["beatrix_core/mongo", "beatrix_macro/mongo"]
+
+[dependencies]
+beatrix_macro = { path="beatrix_macro", version = "0.1.0" }
+beatrix_core = { path="beatrix_core", version = "0.1.0" }
+beatrix_helpers = { path="beatrix_helpers", version = "0.1.0" }
+
+[dev-dependencies]
+# TODO: UPgrade to latest tokio
+tokio = { version = "1.49.0", features = ["full"] }
+dotenv = "0.15.0"
+futures = "0.3.32"
+
+[[test]]
+name = "mongo"
+path = "tests/mongo.rs"
+required-features = ["mongo"]
+
+[[test]]
+name = "table-macro"
+path = "tests/rdms/postgres/table_macro.rs"
+required-features = ["postgres"]
+
+[[test]]
+name = "date-time"
+path = "tests/rdms/postgres/date_time.rs"
+required-features = ["postgres", "chrono"]

@@ -40,7 +40,7 @@ pub fn test_conversion_to_and_from_bson() {
         age: 10,
     };
 
-    let doc = customer.into_document().unwrap();
+    let doc = customer.to_document().unwrap();
     assert_eq!(customer, Customer::from_bson(doc).unwrap())
 }
 
